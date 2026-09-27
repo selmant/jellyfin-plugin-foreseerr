@@ -1,0 +1,12 @@
+# Build output
+dist/
+bin/
+obj/
+
+# Foreseerr checkout compiled by scripts/sidecar.sh
+.foreseerr/
+
+# Local Jellyfin test environment (bun run dev)
+.dev/
+
+.DS_Store

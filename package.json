@@ -1,0 +1,12 @@
+{
+  "name": "jellyfin-plugin-foreseerr",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sidecar": "scripts/sidecar.sh",
+    "build": "scripts/build.sh",
+    "manifest": "bun scripts/merge-manifests.mjs",
+    "prove": "bun scripts/prove.mjs",
+    "dev": "bun scripts/dev.mjs"
+  }
+}

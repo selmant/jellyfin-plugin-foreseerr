@@ -1,0 +1,79 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+# Serves the Jellyfin plugin repository manifest at
+# https://selmant.github.io/jellyfin-plugin-foreseerr/manifest.json. It lists
+# every published release; Jellyfin offers each server the newest build its
+# version accepts. The release workflow runs this after publishing.
+name: Pages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/pages.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build repository manifest
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Combine release manifests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p manifests site
+          n=0
+          # Newest first, so the first manifest supplies the plugin metadata.
+          while read -r tag; do
+            n=$((n + 1))
+            gh release download "$tag" --repo "$GITHUB_REPOSITORY" \
+              --pattern foreseerr-jellyfin-manifest.json \
+              --output "manifests/$(printf '%04d' "$n").json"
+          done < <(gh release list --repo "$GITHUB_REPOSITORY" --limit 1000 \
+            --exclude-drafts --json tagName --jq '.[].tagName')
+          if (( n == 0 )); then
+            echo '[]' > site/manifest.json
+          else
+            jq -s '[(.[0][0] | del(.versions)) + {
+              versions: ([.[][0].versions[]]
+                | unique_by(.version)
+                | sort_by(.version | split(".") | map(tonumber))
+                | reverse)
+            }]' manifests/*.json > site/manifest.json
+          fi
+          jq -r '.[0].versions[]? | "\(.version) targetAbi \(.targetAbi)"' site/manifest.json
+          cat > site/index.html <<'EOF'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>Foreseerr for Jellyfin</title>
+          <p>Jellyfin plugin repository. In Jellyfin, go to Dashboard → Plugins → Repositories and add
+          <code>https://selmant.github.io/jellyfin-plugin-foreseerr/manifest.json</code>.</p>
+          <p><a href="https://github.com/selmant/jellyfin-plugin-foreseerr">Foreseerr for Jellyfin on GitHub</a></p>
+          EOF
+
+      - uses: actions/upload-pages-artifact@7b1f4a764d45c48632c6b24a0339c27f5614fb0b6 # v4.0.0
+        with:
+          path: site
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5
