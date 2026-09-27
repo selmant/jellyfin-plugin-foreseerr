@@ -13,7 +13,7 @@
     <TargetAbi>$(JellyfinVersion).0</TargetAbi>
     <!-- The plugin release version (tag v<version>). Each release bundles
          the Foreseerr version pinned in foreseerr.version. -->
-    <ReleaseVersion>0.1.0-alpha.1</ReleaseVersion>
+    <ReleaseVersion>0.1.0-alpha.2</ReleaseVersion>
     <!-- Jellyfin versions are four numeric parts, so the prerelease goes into
          the revision: alpha.N < beta.N < rc.N < the final release, each
          followed by the ABI digit. 0.11.0-alpha.2 for Jellyfin 12 is 0.11.0.1021. -->

@@ -3,10 +3,12 @@ using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Net;
+using MediaBrowser.Common.Plugins;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Configuration;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Security;
+using MediaBrowser.Model.Plugins;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
@@ -262,17 +264,25 @@ public class JellyfinHostBootstrap
         return null;
     }
 
-    public static bool BetterTraktPresent()
+    private bool BetterTraktPresent()
     {
-        return AssemblyLoadContext.All
+        // Better Trakt can ship as a drop-in for the official plugin, keeping
+        // its Trakt.dll assembly and GUID, so the plugin name is checked too.
+        var plugins = _services.GetService<IPluginManager>()?.Plugins
+            .Where(plugin => plugin.Manifest.Status == PluginStatus.Active)
+            .Select(plugin => plugin.Name) ?? [];
+        var assemblies = AssemblyLoadContext.All
             .SelectMany(context => context.Assemblies)
-            .Any(assembly =>
-            {
-                var name = assembly.GetName().Name ?? assembly.FullName ?? "";
-                return name.Contains("BetterTrakt", StringComparison.OrdinalIgnoreCase)
-                    || (name.Contains("Trakt", StringComparison.OrdinalIgnoreCase)
-                        && name.Contains("Better", StringComparison.OrdinalIgnoreCase));
-            });
+            .Select(assembly => assembly.GetName().Name ?? assembly.FullName ?? "");
+        return IsBetterTrakt(plugins.Concat(assemblies));
+    }
+
+    internal static bool IsBetterTrakt(IEnumerable<string> names)
+    {
+        return names.Any(name =>
+            name.Contains("BetterTrakt", StringComparison.OrdinalIgnoreCase)
+            || (name.Contains("Trakt", StringComparison.OrdinalIgnoreCase)
+                && name.Contains("Better", StringComparison.OrdinalIgnoreCase)));
     }
 
     private string? EnsureApiKey()
