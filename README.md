@@ -19,7 +19,7 @@ A third-party Jellyfin plugin that runs [Foreseerr](https://github.com/selmant/f
 
 Manual install: extract `foreseerr-jellyfin-10.11.zip` or `foreseerr-jellyfin-12.zip` from a [release](https://github.com/selmant/jellyfin-plugin-foreseerr/releases) into Jellyfin's `plugins/Foreseerr/` folder and restart Jellyfin.
 
-Requirements: Jellyfin 10.11 or newer on Linux x64, Linux arm64, or Windows x64, used through Jellyfin Web in a browser. The official mobile and TV apps cannot open Foreseerr. Behind a reverse proxy, forward `/Foreseerr` and `/ForeseerrPlugin`, and add the proxy to Jellyfin's Known Proxies. The [Foreseerr plugin guide](https://selmant.github.io/foreseerr/using-seerr/jellyfin-plugin) covers the user side in more detail.
+Requirements: Jellyfin 10.11 or newer on Linux x64, Linux arm64, or Windows x64, used through Jellyfin Web in a browser. The bundled Foreseerr server is linked against glibc: Alpine-based Jellyfin images cannot run it, and NixOS needs `programs.nix-ld.enable = true;`. The official mobile and TV apps cannot open Foreseerr. Behind a reverse proxy, forward `/Foreseerr` and `/ForeseerrPlugin`, and add the proxy to Jellyfin's Known Proxies. The [Foreseerr plugin guide](https://selmant.github.io/foreseerr/using-seerr/jellyfin-plugin) covers the user side in more detail.
 
 Report problems with the plugin here, and problems with Foreseerr itself in the [Foreseerr repository](https://github.com/selmant/foreseerr/issues).
 
@@ -117,7 +117,7 @@ Everything else comes from Jellyfin on each sidecar start: server name, loopback
 - Jellyfin Web (desktop) is the supported UI. Android TV and the official mobile apps do not load this SPA.
 - Without [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation), there is no header button; users open `<base>/Foreseerr/` directly (the dashboard page shows the link).
 - Web push notifications are off under the plugin's base path.
-- Sidecar binaries exist for linux-x64, linux-arm64, and windows-x64 only.
+- Sidecar binaries exist for linux-x64, linux-arm64, and windows-x64 only, and the Linux ones need glibc (on NixOS, `programs.nix-ld.enable = true;`).
 - Reverse proxies must forward `/Foreseerr` and `/ForeseerrPlugin`. Configure Jellyfin's Known Proxies so it sees HTTPS; otherwise the ticket cookie is not marked `Secure`.
 - WebSocket upgrades are not proxied. Foreseerr does not use them.
 
