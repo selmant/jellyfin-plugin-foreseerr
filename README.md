@@ -25,7 +25,7 @@ Report problems with the plugin here, and problems with Foreseerr itself in the 
 
 ## Versions
 
-The plugin has its own version, `ReleaseVersion` in `Build.props` (currently `0.1.0-alpha.3`). Each release bundles the Foreseerr version in `foreseerr.version` (currently `v0.11.1`), compiled with its `/Foreseerr` base path.
+The plugin has its own version, `ReleaseVersion` in `Build.props` (currently `0.1.0-alpha.4`). Each release bundles the Foreseerr version in `foreseerr.version` (currently `v0.13.0`), compiled with its `/Foreseerr` base path.
 
 Each release ships one build per Jellyfin ABI:
 
