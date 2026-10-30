@@ -88,9 +88,10 @@ public sealed class SidecarSupervisor(
                 | UnixFileMode.GroupRead | UnixFileMode.GroupExecute);
 
         var generation = Guid.NewGuid();
+        var runtime = Path.GetDirectoryName(binary)!;
         var start = new ProcessStartInfo(binary)
         {
-            WorkingDirectory = Path.GetDirectoryName(binary)!,
+            WorkingDirectory = runtime,
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
@@ -107,6 +108,11 @@ public sealed class SidecarSupervisor(
         start.Environment["PORT"] = "0";
         start.Environment["NODE_ENV"] = "production";
         start.Environment.Remove("FORESEERR_RUNTIME");
+        // The binaries share seerr-api.yml, dist/public and committag.json in
+        // the sidecar directory, and run the whole backend themselves.
+        start.Environment["FORESEERR_APP_ROOT"] = runtime;
+        start.Environment.Remove("FORESEERR_PUBLIC_PATH");
+        start.Environment["FORESEERR_STANDALONE"] = "1";
 
         using var process = new Process { StartInfo = start };
         var listening = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);

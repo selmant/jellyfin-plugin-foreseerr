@@ -1,8 +1,9 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-# Builds the plugin against the pinned Foreseerr version and installs it into
-# real Jellyfin servers. The weekly run builds Foreseerr develop instead, to
-# catch changes on the Foreseerr side before its next release.
+# Builds the plugin around a Foreseerr runtime built from source (the pinned
+# Foreseerr tag, so CI does not depend on its release assets) and installs it
+# into real Jellyfin servers. The weekly run builds Foreseerr develop instead,
+# to catch changes on the Foreseerr side before its next release.
 name: CI
 
 on:
@@ -28,7 +29,7 @@ jobs:
   smoke:
     name: Jellyfin ${{ matrix.abi }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +49,8 @@ jobs:
             9.0.x
             10.0.x
       - run: dotnet test Foreseerr.Jellyfin.Tests/Foreseerr.Jellyfin.Tests.csproj -c Release -p:JellyfinTarget=${{ matrix.abi }}
-      - run: scripts/sidecar.sh linux-x64
+      # sidecar.sh installs Foreseerr's pinned Rust toolchain with rustup.
+      - name: Build the Foreseerr runtime
+        run: FORESEERR_REF="${FORESEERR_REF:-$(tr -d '[:space:]' < foreseerr.version)}" scripts/sidecar.sh linux-x64
       - run: scripts/build.sh '${{ matrix.abi }}' linux-x64
       - run: bun scripts/prove.mjs '${{ matrix.abi }}'

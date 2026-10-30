@@ -1,9 +1,9 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-# Tag v<ReleaseVersion> to release. Builds both Jellyfin ABIs with the
-# Foreseerr version in foreseerr.version, proves them in real Jellyfin
-# servers, publishes the GitHub release, then refreshes the repository
-# manifest on GitHub Pages.
+# Tag v<ReleaseVersion> to release. Builds both Jellyfin ABIs around the
+# Foreseerr runtimes published with the Foreseerr release in foreseerr.version,
+# proves them in real Jellyfin servers, publishes the GitHub release, then
+# refreshes the repository manifest on GitHub Pages.
 name: Release
 
 on:
@@ -64,11 +64,11 @@ jobs:
           dotnet test Foreseerr.Jellyfin.Tests/Foreseerr.Jellyfin.Tests.csproj -c Release -p:JellyfinTarget=10.11
           dotnet test Foreseerr.Jellyfin.Tests/Foreseerr.Jellyfin.Tests.csproj -c Release -p:JellyfinTarget=12
 
-      - name: Compile Foreseerr sidecars
+      - name: Download Foreseerr runtimes
         id: foreseerr
         run: |
           scripts/sidecar.sh
-          echo "version=$(jq -r .version .foreseerr/package.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version dist/sidecar.json)" >> "$GITHUB_OUTPUT"
 
       - name: Pack plugin archives and manifest
         run: |

@@ -3,7 +3,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 
 // Usage: pack.mjs <abi> <publish dir> <msbuild -getProperty JSON>
-// FORESEERR_DIR is the Foreseerr checkout the sidecar was compiled from.
+// dist/sidecar.json names the Foreseerr version scripts/sidecar.sh bundled.
 const [abi, output, properties] = process.argv.slice(2);
 if (!['10.11', '12'].includes(abi) || !output || !properties) {
   throw new Error('Expected ABI, publish directory, and MSBuild properties');
@@ -26,12 +26,8 @@ const root = resolve(import.meta.dir, '..');
 const repo = 'https://github.com/selmant/jellyfin-plugin-foreseerr';
 // Release assets live under the tag, which keeps any prerelease suffix.
 const tag = `v${release}`;
-const foreseerrDir = resolve(
-  root,
-  process.env.FORESEERR_DIR || join(root, '.foreseerr')
-);
 const foreseerr = JSON.parse(
-  readFileSync(join(foreseerrDir, 'package.json'), 'utf8')
+  readFileSync(join(root, 'dist/sidecar.json'), 'utf8')
 ).version;
 const template = JSON.parse(
   readFileSync(join(root, 'manifest.template.json'), 'utf8')
@@ -46,6 +42,17 @@ const timestamp = new Date(
 if (!existsSync(join(output, 'thumb.png'))) {
   throw new Error('Missing plugin image thumb.png');
 }
+// The Foreseerr binaries refuse to start without these (FORESEERR_APP_ROOT).
+const sidecar = join(output, 'sidecar');
+const binaries = readdirSync(sidecar).filter((name) =>
+  /^foreseerr-(linux-x64|linux-arm64|windows-x64\.exe)$/.test(name)
+);
+for (const file of ['seerr-api.yml', 'dist/public/index.html']) {
+  if (!existsSync(join(sidecar, file))) {
+    throw new Error(`Missing sidecar/${file}`);
+  }
+}
+if (binaries.length === 0) throw new Error('No Foreseerr sidecar binary');
 const meta = {
   ...template,
   version,
