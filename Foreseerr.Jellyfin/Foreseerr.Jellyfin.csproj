@@ -32,7 +32,8 @@
     <InternalsVisibleTo Include="Foreseerr.Jellyfin.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Pages/configPage.html" LogicalName="Foreseerr.Jellyfin.Pages.configPage.html" />
+    <EmbeddedResource Include="Configuration/configPage.html" LogicalName="Foreseerr.Jellyfin.Configuration.configPage.html" />
+    <EmbeddedResource Include="Configuration/configPage.js" LogicalName="Foreseerr.Jellyfin.Configuration.configPage.js" />
     <EmbeddedResource Include="Web/inject.html" LogicalName="Foreseerr.Jellyfin.Web.inject.html" />
     <EmbeddedResource Include="Web/loader.js" LogicalName="Foreseerr.Jellyfin.Web.loader.js" />
   </ItemGroup>

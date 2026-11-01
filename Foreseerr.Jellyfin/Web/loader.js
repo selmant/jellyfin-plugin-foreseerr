@@ -32,7 +32,7 @@
     '<path fill="currentColor" fill-rule="evenodd" d="M48 96C74.5 96 96 74.5 96 48S74.5 0 48 0 0 21.5 0 48s21.5 48 48 48Zm32-44c0 15.5-12.5 28-28 28S24 67.5 24 52c0-2.9.4-5.6 1.2-8.2C27.4 48.6 32.3 52 38 52c7.7 0 14-6.3 14-14 0-5.7-3.4-10.6-8.2-12.8 2.6-.8 5.3-1.2 8.2-1.2 15.5 0 28 12.5 28 28Z"/>' +
     '</svg>';
 
-  // A refused account gets Foreseerr's reason; anything else is an outage.
+  // A refusal, or Foreseerr turned off, comes with the plugin's reason.
   function signInError(res) {
     return res
       .json()
@@ -41,9 +41,8 @@
       })
       .then(function (body) {
         throw new Error(
-          res.status === 403 && body.detail
-            ? body.detail
-            : 'Foreseerr sign-in is unavailable. Check the plugin status and retry.'
+          body.detail ||
+            'Foreseerr sign-in is unavailable. Check the plugin status and retry.'
         );
       });
   }
@@ -107,23 +106,55 @@
     return button;
   }
 
-  function signedIn() {
+  function currentToken() {
     var api = currentApiClient();
     try {
-      return !!(
-        api &&
-        typeof api.accessToken === 'function' &&
-        api.accessToken()
+      return (
+        (api && typeof api.accessToken === 'function' && api.accessToken()) ||
+        null
       );
     } catch {
-      return false;
+      return null;
     }
+  }
+
+  // The plugin page decides who gets the button (Header button, Access, and
+  // whether Foreseerr runs); ask once per Jellyfin login and every few minutes.
+  var RECHECK = 5 * 60 * 1000;
+  var allowed = { token: null, value: false, at: 0, pending: false };
+
+  function checkAllowed(token) {
+    var api = currentApiClient();
+    if (allowed.pending || !api) return;
+    allowed.pending = true;
+    fetch(api.getUrl('ForeseerrPlugin/Client'), {
+      credentials: 'same-origin',
+      headers: authHeaders(api),
+    })
+      .then(function (res) {
+        return res.ok ? res.json() : { headerButton: false };
+      })
+      .then(function (body) {
+        allowed.value = !!body.headerButton;
+      })
+      .catch(function () {
+        allowed.value = false;
+      })
+      .finally(function () {
+        allowed.token = token;
+        allowed.at = Date.now();
+        allowed.pending = false;
+        ensureButton();
+      });
   }
 
   function ensureButton() {
     var existing = document.querySelector('.headerForeseerrButton');
+    var token = currentToken();
+    if (token && (allowed.token !== token || Date.now() - allowed.at > RECHECK))
+      checkAllowed(token);
     // The login screen also renders an app bar; SSO needs a Jellyfin session.
-    if (!signedIn()) {
+    if (!token || allowed.token !== token || !allowed.value) {
       if (existing) existing.remove();
       return;
     }
@@ -144,5 +175,7 @@
       ensureButton();
     });
   }).observe(document.documentElement, { childList: true, subtree: true });
+  // A page that doesn't change still picks up a changed setting.
+  setInterval(ensureButton, 60 * 1000);
   ensureButton();
 })();

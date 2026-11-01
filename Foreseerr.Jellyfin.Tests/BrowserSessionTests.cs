@@ -1,5 +1,7 @@
 using System.Reflection;
-using Foreseerr.Jellyfin;
+using Foreseerr.Jellyfin.Configuration;
+using Foreseerr.Jellyfin.Sidecar;
+using Foreseerr.Jellyfin.Web;
 using Jellyfin.Database.Implementations.Entities;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Net;
@@ -66,7 +68,7 @@ public class BrowserSessionTests
     }
 
     private static ForeseerrProxyController Controller(SidecarSessionService sessions, FakeAuth auth, HttpContext context) =>
-        new(null!, sessions, null!, auth, null!, DispatchProxy.Create<IServerApplicationHost, ServerHost>())
+        new(null!, sessions, null!, auth, DispatchProxy.Create<IServerApplicationHost, ServerHost>())
         {
             ControllerContext = new ControllerContext { HttpContext = context },
         };
