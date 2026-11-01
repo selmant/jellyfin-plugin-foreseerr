@@ -175,5 +175,7 @@
       ensureButton();
     });
   }).observe(document.documentElement, { childList: true, subtree: true });
+  // A page that doesn't change still picks up a changed setting.
+  setInterval(ensureButton, 60 * 1000);
   ensureButton();
 })();

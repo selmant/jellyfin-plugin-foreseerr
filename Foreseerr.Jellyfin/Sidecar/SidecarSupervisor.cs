@@ -168,14 +168,23 @@ public sealed class SidecarSupervisor(
             }
 
             using var cycle = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+            bool interrupted;
             lock (_lock)
             {
-                _cycle = cycle;
-                _applied = settings;
-                _state = SidecarState.Starting;
-                _lastRunReady = null;
-                if (starts++ > 0) _restarts++;
+                // A settings change or restart request since the read above found no run to end:
+                // read the settings again rather than start with the old ones.
+                interrupted = wake.IsCompleted;
+                if (!interrupted)
+                {
+                    _cycle = cycle;
+                    _applied = settings;
+                    _state = SidecarState.Starting;
+                    _lastRunReady = null;
+                    if (starts++ > 0) _restarts++;
+                }
             }
+
+            if (interrupted) continue;
 
             try
             {
