@@ -1,6 +1,7 @@
-using System.Reflection;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
+using Foreseerr.Jellyfin.Configuration;
+using Foreseerr.Jellyfin.Sidecar;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Controller;
@@ -9,8 +10,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Foreseerr.Jellyfin;
+namespace Foreseerr.Jellyfin.Web;
 
+/// <summary>
+/// Foreseerr itself under /Foreseerr: the sign-in that turns a Jellyfin login
+/// into a Foreseerr session, and the reverse proxy to the sidecar.
+/// </summary>
 [ApiController]
 [Route("")]
 public class ForeseerrProxyController(
@@ -18,7 +23,6 @@ public class ForeseerrProxyController(
     SidecarSessionService sessions,
     IHttpClientFactory clients,
     IAuthService auth,
-    JellyfinHostBootstrap bootstrap,
     IServerApplicationHost appHost) : ControllerBase
 {
     private static readonly HashSet<string> HopByHop = new(StringComparer.OrdinalIgnoreCase)
@@ -27,31 +31,6 @@ public class ForeseerrProxyController(
         "te", "trailer", "trailers", "transfer-encoding", "upgrade", "host",
     };
 
-    [HttpGet("ForeseerrPlugin/loader.js")]
-    [AllowAnonymous]
-    public IActionResult Loader()
-    {
-        using var stream = Assembly.GetExecutingAssembly()
-            .GetManifestResourceStream("Foreseerr.Jellyfin.Web.loader.js");
-        if (stream == null) return NotFound();
-        using var reader = new StreamReader(stream);
-        return Content(reader.ReadToEnd(), "application/javascript");
-    }
-
-    [HttpGet("ForeseerrPlugin/Status")]
-    [Authorize(Policy = "RequiresElevation")]
-    public IActionResult Status() => Ok(new
-    {
-        running = supervisor.IsRunning,
-        ready = supervisor.IsReady,
-        pid = supervisor.Pid,
-        lastError = supervisor.LastError,
-        sidecarPort = supervisor.Port,
-        version = typeof(ForeseerrPlugin).Assembly.GetName().Version?.ToString(),
-        publicUrl = bootstrap.PublicUrl(),
-        headerButton = FileTransformationHostedService.Registered,
-    });
-
     [HttpPost("Foreseerr/sso")]
     [Authorize]
     public async Task<IActionResult> Sso(CancellationToken cancellationToken)
@@ -59,9 +38,11 @@ public class ForeseerrProxyController(
         var authorization = await auth.Authenticate(Request).ConfigureAwait(false);
         if (!authorization.IsAuthenticated || authorization.IsApiKey
             || authorization.UserId == Guid.Empty || authorization.User == null || string.IsNullOrEmpty(authorization.Token)) return Unauthorized();
+        var isAdministrator = authorization.User.HasPermission(PermissionKind.IsAdministrator);
+        if (PluginAccess.Check(Settings, isAdministrator) is { } refusal)
+            return Problem(refusal.Message, statusCode: refusal.StatusCode);
         var session = sessions.SessionFor(authorization.UserId, authorization.Token);
-        var signIn = await sessions.EnsureCookieAsync(session, authorization.User!.Username,
-            authorization.User.HasPermission(PermissionKind.IsAdministrator), cancellationToken);
+        var signIn = await sessions.EnsureCookieAsync(session, authorization.User.Username, isAdministrator, cancellationToken);
         if (signIn.Denied != null) return Problem(signIn.Denied, statusCode: StatusCodes.Status403Forbidden);
         if (signIn.Cookie == null) return Problem("Foreseerr sign-in is unavailable. Retry after checking the plugin status.", statusCode: 503);
 
@@ -89,16 +70,24 @@ public class ForeseerrProxyController(
             // omits the SameSite=Strict cookie that the browser still holds.
             if (Request.Cookies.ContainsKey(SidecarSessionService.CookieName))
                 Response.Cookies.Delete(SidecarSessionService.CookieName, CookieOptions());
-            if (HttpMethods.IsGet(Request.Method) && Request.Headers.Accept.ToString().Contains("text/html", StringComparison.Ordinal))
-                return SignInPage();
+            if (IsPageRequest()) return SignInPage();
             return Unauthorized(new { message = "Open Foreseerr from Jellyfin to sign in." });
         }
 
         var (session, authorization) = authenticated.Value;
-        var signIn = await sessions.EnsureCookieAsync(session, authorization.User!.Username,
-            authorization.User.HasPermission(PermissionKind.IsAdministrator), cancellationToken);
+        var user = authorization.User!;
+        var isAdministrator = user.HasPermission(PermissionKind.IsAdministrator);
+        if (PluginAccess.Check(Settings, isAdministrator) is { } refusal)
+        {
+            // The sign-in page asks /Foreseerr/sso, which explains the refusal.
+            if (IsPageRequest()) return SignInPage();
+            return StatusCode(refusal.StatusCode, new { message = refusal.Message });
+        }
+
+        var signIn = await sessions.EnsureCookieAsync(session, user.Username, isAdministrator, cancellationToken);
         if (signIn.Denied != null) return StatusCode(StatusCodes.Status403Forbidden);
-        if (signIn.Cookie is not { } cookie) return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        if (signIn.Cookie is not { } cookie || supervisor.Endpoint is not { } endpoint)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
 
         // These routes can replace a Foreseerr identity independently of Jellyfin.
         // Keep the mint endpoint private even to authenticated browser sessions.
@@ -110,7 +99,7 @@ public class ForeseerrProxyController(
         // The upstream always uses a fixed origin and mount. Request.PathBase
         // belongs to Jellyfin and is deliberately not part of the sidecar path.
         using var upstream = new HttpRequestMessage(new HttpMethod(Request.Method),
-            supervisor.Origin + Request.Path + Request.QueryString);
+            endpoint.Origin + Request.Path + Request.QueryString);
         if (Request.ContentLength is > 0 || Request.Headers.ContainsKey("Transfer-Encoding"))
             upstream.Content = new StreamContent(Request.Body);
         var excluded = ConnectionHeaders(Request.Headers.Connection.ToString());
@@ -121,7 +110,7 @@ public class ForeseerrProxyController(
                 upstream.Content.Headers.TryAddWithoutValidation(header.Key, header.Value.ToArray());
         }
         upstream.Headers.Add("Cookie", cookie);
-        upstream.Headers.Add("X-Foreseerr-Plugin-Secret", ForeseerrPlugin.Instance!.Configuration.PluginSecret);
+        upstream.Headers.Add("X-Foreseerr-Plugin-Secret", endpoint.Secret);
         upstream.Headers.Add("X-Forwarded-Proto", Request.Scheme);
 
         using var client = clients.CreateClient(PluginServiceRegistrator.SidecarHttpClient);
@@ -162,6 +151,11 @@ public class ForeseerrProxyController(
         }
         return new EmptyResult();
     }
+
+    private static PluginConfiguration Settings => ForeseerrPlugin.Instance?.Configuration ?? new PluginConfiguration();
+
+    private bool IsPageRequest() =>
+        HttpMethods.IsGet(Request.Method) && Request.Headers.Accept.ToString().Contains("text/html", StringComparison.Ordinal);
 
     private CookieOptions CookieOptions() => new()
     {
@@ -244,13 +238,15 @@ public class ForeseerrProxyController(
             headers: { Authorization: 'MediaBrowser Token="' + token + '"' }
           }).then(function (response) {
             if (response.status === 401) throw new Error('Your Jellyfin session has ended. Sign in to Jellyfin, then open this link again.');
-            if (response.status === 403) {
+            if (!response.ok) {
+              // A refusal, or Foreseerr turned off or starting: show the plugin's reason.
               return response.json().catch(function () { return {}; }).then(function (body) {
                 sessionStorage.removeItem('foreseerr-signin');
-                throw new Error(body.detail || 'Foreseerr refused this Jellyfin account.');
+                throw new Error(body.detail || (response.status === 403
+                  ? 'Foreseerr refused this Jellyfin account.'
+                  : 'Foreseerr sign-in is unavailable. Check the plugin status in Jellyfin and retry.'));
               });
             }
-            if (!response.ok) throw new Error('Foreseerr sign-in is unavailable. Check the plugin status in Jellyfin and retry.');
             location.replace(location.href);
           }).catch(function (error) {
             fail(error.message || 'Foreseerr sign-in is unavailable.');

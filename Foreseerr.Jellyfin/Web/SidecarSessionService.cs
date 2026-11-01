@@ -2,11 +2,12 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Foreseerr.Jellyfin.Sidecar;
 using MediaBrowser.Controller.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
-namespace Foreseerr.Jellyfin;
+namespace Foreseerr.Jellyfin.Web;
 
 /// <summary>
 /// Browser tickets are opaque and scoped to a single Jellyfin login. Neither
@@ -167,16 +168,15 @@ public sealed class SidecarSessionService
     public async Task<SignIn> EnsureCookieAsync(BrowserSession session, string username,
         bool isAdmin, CancellationToken cancellationToken)
     {
-        if (session.Cookie is { } minted && minted.Generation == _supervisor.Generation) return new SignIn(minted.Value);
+        if (session.Cookie is { } minted && minted.Generation == _supervisor.Endpoint?.Generation) return new SignIn(minted.Value);
         await session.Gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var generation = _supervisor.Generation;
-            if (session.Cookie is { } current && current.Generation == generation) return new SignIn(current.Value);
-            var secret = ForeseerrPlugin.Instance?.Configuration.PluginSecret;
-            if (string.IsNullOrEmpty(secret) || !_supervisor.IsReady) return new SignIn(null);
+            // A session cookie is only valid for the Foreseerr process that minted it.
+            if (_supervisor.Endpoint is not { } endpoint) return new SignIn(null);
+            if (session.Cookie is { } current && current.Generation == endpoint.Generation) return new SignIn(current.Value);
             using var request = new HttpRequestMessage(HttpMethod.Post,
-                $"{_supervisor.Origin}/Foreseerr/api/v1/auth/jellyfin/plugin")
+                $"{endpoint.Origin}/Foreseerr/api/v1/auth/jellyfin/plugin")
             {
                 Content = JsonContent.Create(new
                 {
@@ -187,7 +187,7 @@ public sealed class SidecarSessionService
                     isAdministrator = isAdmin,
                 }),
             };
-            request.Headers.Add("X-Foreseerr-Plugin-Secret", secret);
+            request.Headers.Add("X-Foreseerr-Plugin-Secret", endpoint.Secret);
             request.Headers.Add("X-Foreseerr-Mint", "1");
             var client = _clients.CreateClient(PluginServiceRegistrator.SidecarHttpClient);
             using var response = await client.SendAsync(request, cancellationToken).ConfigureAwait(false);
@@ -202,7 +202,7 @@ public sealed class SidecarSessionService
             if (!response.Headers.TryGetValues("Set-Cookie", out var headers)) return new SignIn(null);
             var cookie = headers.Select(header => header.Split(';', 2)[0])
                 .FirstOrDefault(pair => pair.StartsWith("connect.sid=", StringComparison.Ordinal));
-            session.Cookie = cookie == null ? null : new Minted(cookie, generation);
+            session.Cookie = cookie == null ? null : new Minted(cookie, endpoint.Generation);
             return new SignIn(cookie);
         }
         catch (HttpRequestException)

@@ -5,13 +5,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json.Linq;
 
-namespace Foreseerr.Jellyfin;
+namespace Foreseerr.Jellyfin.Web;
 
-public class FileTransformationHostedService : IHostedService
+/// <summary>
+/// Adds loader.js to Jellyfin Web's index.html through the File
+/// Transformation plugin. The loader asks /ForeseerrPlugin/Client whether to
+/// show the header button, so the setting applies without a restart.
+/// </summary>
+public class HeaderButtonRegistration : IHostedService
 {
-    private readonly ILogger<FileTransformationHostedService> _logger;
+    private readonly ILogger<HeaderButtonRegistration> _logger;
 
-    public FileTransformationHostedService(ILogger<FileTransformationHostedService> logger)
+    public HeaderButtonRegistration(ILogger<HeaderButtonRegistration> logger)
     {
         _logger = logger;
     }
@@ -30,7 +35,7 @@ public class FileTransformationHostedService : IHostedService
         return Task.CompletedTask;
     }
 
-    /// <summary>Whether Jellyfin Web gets the header button.</summary>
+    /// <summary>Whether Jellyfin Web loads the header button script (File Transformation is installed).</summary>
     public static bool Registered { get; private set; }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

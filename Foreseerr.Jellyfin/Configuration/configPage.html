@@ -1,0 +1,241 @@
+<div
+  id="ForeseerrConfigPage"
+  data-role="page"
+  class="page type-interior pluginConfigurationPage foreseerrConfigurationPage"
+  data-require="emby-input,emby-button,emby-select,emby-checkbox"
+  data-controller="__plugin/ForeseerrConfigPage.js"
+>
+  <style>
+    .foreseerrConfigurationPage .foreseerrStatusLine {
+      display: flex;
+      align-items: center;
+      gap: 0.6em;
+      font-size: 1.1em;
+    }
+    .foreseerrConfigurationPage .foreseerrDot {
+      flex: none;
+      width: 0.75em;
+      height: 0.75em;
+      border-radius: 50%;
+      background: #9e9e9e;
+    }
+    .foreseerrConfigurationPage .foreseerrDot[data-tone='ok'] {
+      background: #4caf50;
+    }
+    .foreseerrConfigurationPage .foreseerrDot[data-tone='busy'] {
+      background: #ffb300;
+    }
+    .foreseerrConfigurationPage .foreseerrDot[data-tone='error'] {
+      background: #e53935;
+    }
+    .foreseerrConfigurationPage .foreseerrError {
+      color: #ef5350;
+    }
+    .foreseerrConfigurationPage .foreseerrActions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5em;
+      margin-top: 1em;
+    }
+    .foreseerrConfigurationPage .foreseerrActions .emby-button {
+      margin: 0;
+    }
+    .foreseerrConfigurationPage .foreseerrLinks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5em 1.5em;
+    }
+    .foreseerrConfigurationPage code {
+      word-break: break-all;
+    }
+    .foreseerrConfigurationPage .foreseerrLog {
+      max-height: 24em;
+      overflow: auto;
+      margin: 0;
+      padding: 0.75em;
+      border-radius: 0.3em;
+      background: rgba(0, 0, 0, 0.3);
+      font-size: 0.8em;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .foreseerrConfigurationPage .foreseerrLog .warning {
+      color: #ffb300;
+    }
+    .foreseerrConfigurationPage .foreseerrLog .error {
+      color: #ef5350;
+    }
+  </style>
+  <div data-role="content">
+    <div class="content-primary">
+      <div class="sectionTitleContainer flex align-items-center">
+        <h2 class="sectionTitle">Foreseerr</h2>
+        <a
+          is="emby-linkbutton"
+          class="raised button-alt headerHelpButton"
+          target="_blank"
+          rel="noopener noreferrer"
+          href="https://github.com/selmant/jellyfin-plugin-foreseerr#readme"
+          >Help</a
+        >
+      </div>
+      <p class="fieldDescription">
+        Alpha, in active development: anything can change, and there is no
+        backward compatibility between plugin versions. Report problems at
+        <a
+          is="emby-linkbutton"
+          class="button-link"
+          href="https://github.com/selmant/jellyfin-plugin-foreseerr/issues"
+          target="_blank"
+          rel="noopener noreferrer"
+          >github.com/selmant/jellyfin-plugin-foreseerr/issues</a
+        >.
+      </p>
+
+      <div class="verticalSection">
+        <h3 class="sectionTitle">Status</h3>
+        <div class="foreseerrStatusLine">
+          <span class="foreseerrDot" id="StatusDot"></span>
+          <span id="StatusText">Checking Foreseerr…</span>
+        </div>
+        <div class="fieldDescription" id="StatusDetails"></div>
+        <div class="fieldDescription foreseerrError hide" id="StatusError"></div>
+        <div class="foreseerrActions">
+          <button
+            is="emby-button"
+            type="button"
+            class="raised button-submit"
+            id="OpenForeseerr"
+          >
+            <span>Open Foreseerr</span>
+          </button>
+          <button
+            is="emby-button"
+            type="button"
+            class="raised"
+            id="RestartForeseerr"
+          >
+            <span>Restart Foreseerr</span>
+          </button>
+        </div>
+      </div>
+
+      <form id="ForeseerrConfigForm">
+        <div class="verticalSection">
+          <h3 class="sectionTitle">Server</h3>
+          <div class="checkboxContainer checkboxContainer-withDescription">
+            <label class="emby-checkbox-label">
+              <input is="emby-checkbox" type="checkbox" id="Enabled" />
+              <span>Run Foreseerr</span>
+            </label>
+            <div class="fieldDescription checkboxFieldDescription">
+              Turn this off to stop Foreseerr without uninstalling the plugin,
+              for example while you restore a backup of its data folder.
+              Jellyfin does not need a restart either way.
+            </div>
+          </div>
+          <div class="fieldDescription">
+            Data folder: <code id="DataDirectory"></code>
+          </div>
+        </div>
+
+        <div class="verticalSection">
+          <h3 class="sectionTitle">Access</h3>
+          <div class="selectContainer">
+            <label class="selectLabel" for="Access">Who can open Foreseerr</label>
+            <select is="emby-select" id="Access">
+              <option value="0">Everyone signed in to Jellyfin</option>
+              <option value="1">Jellyfin administrators only</option>
+            </select>
+            <div class="fieldDescription">
+              Use administrators only while you set Foreseerr up. Foreseerr's
+              own user settings still apply: <b>Enable New Jellyfin Sign-In</b>
+              in Foreseerr decides whether Jellyfin users it has not imported
+              can open it. The first Jellyfin administrator to open Foreseerr
+              becomes its owner, and Jellyfin administrators are Foreseerr
+              admins.
+            </div>
+          </div>
+          <div class="checkboxContainer checkboxContainer-withDescription">
+            <label class="emby-checkbox-label">
+              <input is="emby-checkbox" type="checkbox" id="HeaderButton" />
+              <span>Show a Foreseerr button in the Jellyfin Web header</span>
+            </label>
+            <div
+              class="fieldDescription checkboxFieldDescription"
+              id="HeaderButtonDescription"
+            ></div>
+          </div>
+          <div class="fieldDescription">
+            Direct link, for bookmarks and other apps:
+            <a
+              id="ForeseerrLink"
+              is="emby-linkbutton"
+              class="button-link"
+              target="_blank"
+              rel="noopener noreferrer"
+            ></a>
+          </div>
+        </div>
+
+        <div class="verticalSection">
+          <h3 class="sectionTitle">Links</h3>
+          <div class="inputContainer">
+            <label class="inputLabel" for="PublicServerUrl"
+              >Public Jellyfin URL</label
+            >
+            <input
+              is="emby-input"
+              type="url"
+              id="PublicServerUrl"
+              placeholder="https://jellyfin.example.com"
+            />
+            <div class="fieldDescription" id="PublicServerUrlDescription"></div>
+          </div>
+        </div>
+
+        <button is="emby-button" type="submit" class="raised button-submit block">
+          <span>Save</span>
+        </button>
+      </form>
+
+      <div class="verticalSection">
+        <h3 class="sectionTitle">In Foreseerr</h3>
+        <p>
+          Radarr, Sonarr, notifications, users and Discover are set up in
+          Foreseerr itself. This plugin manages the Jellyfin side: the server
+          address and API key, the libraries list, the sign-in and the first
+          administrator.
+        </p>
+        <div class="foreseerrLinks">
+          <a is="emby-linkbutton" class="button-link" data-foreseerr-path="settings/integrations" target="_blank" rel="noopener noreferrer">Radarr, Sonarr and integrations</a>
+          <a is="emby-linkbutton" class="button-link" data-foreseerr-path="settings/notifications/email" target="_blank" rel="noopener noreferrer">Notifications</a>
+          <a is="emby-linkbutton" class="button-link" data-foreseerr-path="users" target="_blank" rel="noopener noreferrer">Users</a>
+          <a is="emby-linkbutton" class="button-link" data-foreseerr-path="settings/users" target="_blank" rel="noopener noreferrer">User defaults</a>
+          <a is="emby-linkbutton" class="button-link" data-foreseerr-path="settings/jellyfin" target="_blank" rel="noopener noreferrer">Jellyfin libraries</a>
+          <a is="emby-linkbutton" class="button-link" data-foreseerr-path="settings/logs" target="_blank" rel="noopener noreferrer">Foreseerr logs</a>
+        </div>
+      </div>
+
+      <div class="verticalSection">
+        <div class="sectionTitleContainer flex align-items-center">
+          <h3 class="sectionTitle">Recent output</h3>
+          <button
+            is="emby-button"
+            type="button"
+            class="raised button-alt"
+            id="RefreshLog"
+          >
+            <span>Refresh</span>
+          </button>
+        </div>
+        <p class="fieldDescription">
+          What Foreseerr and the plugin printed since Jellyfin started, newest
+          last. Jellyfin's log has the same lines, marked [foreseerr].
+        </p>
+        <pre class="foreseerrLog" id="ForeseerrLog"></pre>
+      </div>
+    </div>
+  </div>
+</div>

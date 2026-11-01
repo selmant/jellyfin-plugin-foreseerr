@@ -1,4 +1,5 @@
 using System.Runtime.Loader;
+using Foreseerr.Jellyfin.Configuration;
 using Jellyfin.Data;
 using Jellyfin.Database.Implementations.Enums;
 using MediaBrowser.Common.Configuration;
@@ -13,8 +14,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 
-namespace Foreseerr.Jellyfin;
+namespace Foreseerr.Jellyfin.Sidecar;
 
+/// <summary>
+/// Writes jellyfin-host.json, the Jellyfin values Foreseerr takes over on
+/// every start: server address, API key, libraries, locale, first administrator.
+/// </summary>
 public class JellyfinHostBootstrap
 {
     private readonly IServerApplicationHost _appHost;
@@ -40,24 +45,17 @@ public class JellyfinHostBootstrap
         _logger = logger;
     }
 
-    /// <summary>Survives plugin upgrades, unlike the versioned plugin install folder.</summary>
-    public string ConfigDirectory =>
-        Path.Combine(_applicationPaths.PluginConfigurationsPath, "Foreseerr", "foreseerr");
+    /// <summary>The plugin's own files. Survives plugin upgrades, unlike the versioned install folder.</summary>
+    public string PluginDirectory => Path.Combine(_applicationPaths.PluginConfigurationsPath, "Foreseerr");
 
-    public void WriteHostFile()
+    /// <summary>Foreseerr's settings, database and logs.</summary>
+    public string ConfigDirectory => Path.Combine(PluginDirectory, "foreseerr");
+
+    internal void WriteHostFile(SidecarSettings settings)
     {
         Directory.CreateDirectory(ConfigDirectory);
-        var plugin = ForeseerrPlugin.Instance;
-        var config = plugin?.Configuration;
-        config?.EnsureSecrets();
-        var publicUrl = PublicUrl();
-
+        var publicUrl = PublicUrl(settings.PublicServerUrl);
         var apiKey = EnsureApiKey();
-        if (plugin != null && !string.IsNullOrEmpty(apiKey) && plugin.Configuration.ApiKeyToken != apiKey)
-        {
-            plugin.Configuration.ApiKeyToken = apiKey;
-            plugin.SaveConfiguration();
-        }
 
         var host = new Dictionary<string, object?>
         {
@@ -77,7 +75,8 @@ public class JellyfinHostBootstrap
                 ["urlBase"] = GetBasePath(),
                 ["externalHostname"] = publicUrl,
                 ["serverId"] = _appHost.SystemId,
-                ["apiKey"] = apiKey ?? config?.ApiKeyToken ?? "",
+                // Empty keeps the key Foreseerr already has.
+                ["apiKey"] = apiKey ?? "",
                 // null keeps Foreseerr's saved library selection.
                 ["libraries"] = CollectLibraries(),
             },
@@ -160,9 +159,8 @@ public class JellyfinHostBootstrap
     /// The Jellyfin address browsers use, including its base path, or "" when
     /// neither the plugin setting nor Jellyfin's published server URI is set.
     /// </summary>
-    public string PublicUrl() =>
-        PublicUrl(ForeseerrPlugin.Instance?.Configuration.PublicServerUrl,
-            ReadNetworkConfiguration()?.PublishedServerUriBySubnet, GetBasePath());
+    public string PublicUrl(string? configured) =>
+        PublicUrl(configured, ReadNetworkConfiguration()?.PublishedServerUriBySubnet, GetBasePath());
 
     internal static string PublicUrl(string? configured, IEnumerable<string>? published, string basePath)
     {
@@ -285,19 +283,14 @@ public class JellyfinHostBootstrap
                 && name.Contains("Better", StringComparison.OrdinalIgnoreCase)));
     }
 
+    /// <summary>Jellyfin's "Foreseerr" API key, created on first use. Jellyfin stores it, so the plugin doesn't.</summary>
     private string? EnsureApiKey()
     {
-        var existing = ForeseerrPlugin.Instance?.Configuration.ApiKeyToken;
-        if (!string.IsNullOrEmpty(existing))
-        {
-            return existing;
-        }
-
         var manager = _services.GetService<IAuthenticationManager>();
         if (manager == null)
         {
             _logger.LogWarning("IAuthenticationManager is not available; Foreseerr API key was not created");
-            return existing;
+            return null;
         }
 
         try
@@ -321,7 +314,7 @@ public class JellyfinHostBootstrap
         }
 
         _logger.LogWarning("Foreseerr API key was not created; set it after first admin login if library scans fail");
-        return existing;
+        return null;
     }
 
     private static string? FindForeseerrApiKey(IAuthenticationManager manager)

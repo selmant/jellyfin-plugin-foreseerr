@@ -1,4 +1,4 @@
-using Foreseerr.Jellyfin;
+using Foreseerr.Jellyfin.Sidecar;
 using Xunit;
 
 namespace Foreseerr.Jellyfin.Tests;

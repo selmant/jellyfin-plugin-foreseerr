@@ -1,7 +1,8 @@
+using Foreseerr.Jellyfin.Sidecar;
+using Foreseerr.Jellyfin.Web;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Plugins;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
 
 namespace Foreseerr.Jellyfin;
 
@@ -20,23 +21,11 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
                 UseProxy = false,
                 AllowAutoRedirect = false,
             });
-        serviceCollection.AddSingleton<SidecarSupervisor>();
+        serviceCollection.AddSingleton<SidecarLog>();
         serviceCollection.AddSingleton<JellyfinHostBootstrap>();
+        serviceCollection.AddSingleton<SidecarSupervisor>();
         serviceCollection.AddSingleton<SidecarSessionService>();
-        serviceCollection.AddHostedService<BindPluginServicesHostedService>();
         serviceCollection.AddHostedService(sp => sp.GetRequiredService<SidecarSupervisor>());
-        serviceCollection.AddHostedService<FileTransformationHostedService>();
+        serviceCollection.AddHostedService<HeaderButtonRegistration>();
     }
-}
-
-internal sealed class BindPluginServicesHostedService : IHostedService
-{
-    public BindPluginServicesHostedService(IServiceProvider services)
-    {
-        ForeseerrPlugin.Services = services;
-    }
-
-    public Task StartAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }
