@@ -19,22 +19,29 @@ A third-party Jellyfin plugin that runs [Foreseerr](https://github.com/selmant/f
 
 Manual install: extract `foreseerr-jellyfin-10.11.zip` or `foreseerr-jellyfin-12.zip` from a [release](https://github.com/selmant/jellyfin-plugin-foreseerr/releases) into Jellyfin's `plugins/Foreseerr/` folder and restart Jellyfin.
 
-Requirements: Jellyfin 10.11 or newer on Linux x64, Linux arm64, or Windows x64, used through Jellyfin Web in a browser. The bundled Foreseerr server is linked against glibc: Alpine-based Jellyfin images cannot run it, and NixOS needs `programs.nix-ld.enable = true;`. The official mobile and TV apps cannot open Foreseerr. Behind a reverse proxy, forward `/Foreseerr` and `/ForeseerrPlugin`, and add the proxy to Jellyfin's Known Proxies. The [Foreseerr plugin guide](https://selmant.github.io/foreseerr/using-seerr/jellyfin-plugin) covers the user side in more detail.
+Requirements: Jellyfin 10.11 or newer on Linux x64, Linux arm64, or Windows x64, used through Jellyfin Web in a browser. The bundled Foreseerr server is linked against glibc: Alpine-based Jellyfin images cannot run it, and NixOS needs `programs.nix-ld.enable = true;`. It uses the system's CA certificates, which Jellyfin needs too. The official mobile and TV apps cannot open Foreseerr. Behind a reverse proxy, forward `/Foreseerr` and `/ForeseerrPlugin`, and add the proxy to Jellyfin's Known Proxies. The [Foreseerr plugin guide](https://selmant.github.io/foreseerr/using-seerr/jellyfin-plugin) covers the user side in more detail.
 
 Report problems with the plugin here, and problems with Foreseerr itself in the [Foreseerr repository](https://github.com/selmant/foreseerr/issues).
 
 ## Versions
 
-The plugin has its own version, `ReleaseVersion` in `Build.props` (currently `0.1.0-alpha.6`). Each release bundles the Foreseerr version in `foreseerr.version` (currently `v0.14.0`), compiled with its `/Foreseerr` base path.
+The plugin version, `ReleaseVersion` in `Build.props` (currently `0.15.0-alpha.1`), follows the Foreseerr release it bundles, in `foreseerr.version` (currently `v0.15.0`). Each release bundles the plugin runtimes (`foreseerr-plugin-<platform>`, built for the `/Foreseerr` base path) published with that Foreseerr release. `plugin.channel` (now `alpha`) sets the suffix:
+
+| `plugin.channel`    | New Foreseerr `vX.Y.Z` | Plugin-only release, same Foreseerr |
+| ------------------- | ---------------------- | ----------------------------------- |
+| `alpha`/`beta`/`rc` | `X.Y.Z-alpha.1`        | `X.Y.Z-alpha.2`, `.3`, …            |
+| `stable`            | `X.Y.Z`                | `X.Y.Z.1`, `.2`, …                  |
+
+Releases before the plugin followed Foreseerr were `0.1.0-alpha.1` to `0.1.0-alpha.6`; `0.15.0-alpha.1` came next.
 
 Each release ships one build per Jellyfin ABI:
 
-| Jellyfin | Archive                        | Framework | `X.Y.Z` release | `X.Y.Z-alpha.N` release |
-| -------- | ------------------------------ | --------- | --------------- | ----------------------- |
-| 10.11.x  | `foreseerr-jellyfin-10.11.zip` | net9.0    | `X.Y.Z.9000`    | `X.Y.Z.1N0`             |
-| 12.x     | `foreseerr-jellyfin-12.zip`    | net10.0   | `X.Y.Z.9001`    | `X.Y.Z.1N1`             |
+| Jellyfin | Archive                        | Framework | `X.Y.Z` release | `X.Y.Z.N` release | `X.Y.Z-alpha.N` release |
+| -------- | ------------------------------ | --------- | --------------- | ----------------- | ----------------------- |
+| 10.11.x  | `foreseerr-jellyfin-10.11.zip` | net9.0    | `X.Y.Z.9000`    | `X.Y.Z.9N0`       | `X.Y.Z.1N0`             |
+| 12.x     | `foreseerr-jellyfin-12.zip`    | net10.0   | `X.Y.Z.9001`    | `X.Y.Z.9N1`       | `X.Y.Z.1N1`             |
 
-Jellyfin versions are four numbers, so the revision carries the prerelease and the ABI: `alpha.N` is `1000 + 10N`, `beta.N` is `2000 + 10N`, `rc.N` is `3000 + 10N`, and a final release is `9000`, plus `0` for 10.11 or `1` for 12. For example, `0.1.0-alpha.2` for Jellyfin 12 is `0.1.0.1021`. Testers on an alpha therefore auto-update to later alphas, betas, and the final release. Other prerelease names, or `N` of 100 or more, fail the build.
+Jellyfin versions are four numbers, so the revision carries the prerelease and the ABI: `alpha.N` is `1000 + 10N`, `beta.N` is `2000 + 10N`, `rc.N` is `3000 + 10N`, a final release is `9000`, and its plugin-only fix `X.Y.Z.N` is `9000 + 10N`, plus `0` for 10.11 or `1` for 12. For example, `0.15.0-alpha.2` for Jellyfin 12 is `0.15.0.1021`. Testers on an alpha therefore auto-update to later alphas, betas, the final release and its fixes. Other prerelease names, or `N` of 100 or more, fail the build.
 
 Jellyfin treats `targetAbi` as a minimum, so a 12 server also accepts the 10.11 build. The higher revision makes installs and auto-updates pick the matching build. `Build.props` owns this mapping; `scripts/merge-manifests.mjs` refuses to publish two builds with the same version. The repository manifest lists every release, so a server keeps getting the newest build its Jellyfin version accepts after an ABI is dropped.
 
@@ -42,15 +49,21 @@ Jellyfin treats `targetAbi` as a minimum, so a 12 server also accepts the 10.11 
 
 ```bash
 mise install                 # Bun and the .NET 10 SDK (also builds net9.0)
-scripts/sidecar.sh           # clone Foreseerr at foreseerr.version into .foreseerr/ and compile the sidecars
+scripts/sidecar.sh           # download the Foreseerr runtimes of foreseerr.version into dist/sidecar/
 scripts/build.sh 10.11       # -> dist/jellyfin-10.11/
 scripts/build.sh 12          # -> dist/jellyfin-12/
 bun scripts/merge-manifests.mjs  # -> dist/release/ (zips + repository manifest)
 ```
 
-For a quicker local build, limit the sidecar targets: `scripts/sidecar.sh linux-x64` then `scripts/build.sh 12 linux-x64`.
+`scripts/sidecar.sh` checks each download against the Foreseerr release's `SHA256SUMS`. For a quicker local build, limit the platforms: `scripts/sidecar.sh linux-x64` then `scripts/build.sh 12 linux-x64`.
 
-To build against a local Foreseerr checkout instead (for changes on both sides), set `FORESEERR_DIR` for both scripts: `FORESEERR_DIR=../foreseerr scripts/sidecar.sh linux-x64 && FORESEERR_DIR=../foreseerr scripts/build.sh 12 linux-x64`. `FORESEERR_REF=develop` builds another Foreseerr tag or branch.
+To bundle a Foreseerr that has no release yet, build its runtimes from source with Foreseerr's `scripts/build-runtime.sh`. This needs Bun, rustup (for Foreseerr's pinned Rust toolchain), and, for platforms other than this machine's, [cargo-zigbuild](https://github.com/rust-cross/cargo-zigbuild) with zig:
+
+- `FORESEERR_DIR=../foreseerr scripts/sidecar.sh linux-x64` builds a local checkout (for changes on both sides).
+- `FORESEERR_REF=develop scripts/sidecar.sh linux-x64` clones another Foreseerr tag or branch into `.foreseerr/` and builds that.
+- `FORESEERR_RUNTIME_DIR=/path/to/runtime scripts/sidecar.sh linux-x64` uses one plugin runtime built earlier (`FORESEERR_BASE_PATH=/Foreseerr scripts/build-runtime.sh <dir>`).
+
+`scripts/build.sh` only reads `dist/sidecar/`, so it needs none of these.
 
 ## Test
 
@@ -63,7 +76,7 @@ bun scripts/prove.mjs 12
 
 The 10.11 tests need the .NET 9 runtime (or `DOTNET_ROLL_FORWARD=Major`). The proof script uses Docker: it installs the built plugin into a disposable Jellyfin served under `/jellyfin`, then checks sidecar readiness, the subpath SPA and assets, SSO, CSRF, mint isolation, logout, and Jellyfin token revocation. Set `FORESEERR_TEST_FT_ARCHIVE` to a [File Transformation](https://github.com/IAmParadox27/jellyfin-plugin-file-transformation) release zip to also check the header-button injection.
 
-CI runs both ABIs on every push and pull request, and weekly against Foreseerr `develop`. Foreseerr's own pull requests also run these proofs against this repository's `main`.
+CI runs both ABIs on every push and pull request with a linux-x64 runtime built from source at `foreseerr.version`, and weekly against Foreseerr `develop`. The release workflow downloads the published runtimes instead.
 
 ## Local test environment
 
@@ -78,7 +91,7 @@ bun run dev down 12                    # stop, keep data
 bun run dev reset 12                   # stop and delete data
 ```
 
-The first `up` completes the Jellyfin setup wizard and creates `admin` / `foreseerr` (administrator), `viewer` / `viewer` (regular user), and empty Movies and Shows libraries. Sign in to Jellyfin Web, then use the header button or open `<base>/Foreseerr/` directly. Drop media into `.dev/jellyfin-<abi>/media/{movies,shows}`. Every `up` reinstalls the plugin from `dist/` and keeps the Jellyfin and Foreseerr data in `.dev/`. Jellyfin listens on `127.0.0.1` unless you pass `--bind 0.0.0.0`. Other options: `--port`, `--image jellyfin/jellyfin:<tag>`, `--no-file-transformation`. `--build` honors `FORESEERR_DIR`.
+The first `up` completes the Jellyfin setup wizard and creates `admin` / `foreseerr` (administrator), `viewer` / `viewer` (regular user), and empty Movies and Shows libraries. Sign in to Jellyfin Web, then use the header button or open `<base>/Foreseerr/` directly. Drop media into `.dev/jellyfin-<abi>/media/{movies,shows}`. Every `up` reinstalls the plugin from `dist/` and keeps the Jellyfin and Foreseerr data in `.dev/`. Jellyfin listens on `127.0.0.1` unless you pass `--bind 0.0.0.0`. Other options: `--port`, `--image jellyfin/jellyfin:<tag>`, `--no-file-transformation`. `--build` honors `FORESEERR_DIR`, `FORESEERR_REF`, and `FORESEERR_RUNTIME_DIR`.
 
 ## Foreseerr in plugin mode
 
@@ -95,6 +108,22 @@ The sidecar reports `pluginMode` in `/api/v1/settings/public`, and the web app a
 A Jellyfin user that Foreseerr refuses (the first user is not an administrator, or new sign-ins are off) sees Foreseerr's reason in the header button alert, the sign-in page, and the plugin page instead of a generic outage message.
 
 This part lives in Foreseerr (`FORESEERR_PLUGIN=1`); this repository holds the Jellyfin side.
+
+## The sidecar
+
+The plugin bundles Foreseerr's Rust backend, the same server as Foreseerr's Docker image, with no Node or Bun. The plugin zip's `sidecar/` folder holds one binary per platform and one copy of the files they read:
+
+```text
+sidecar/
+  foreseerr-linux-x64
+  foreseerr-linux-arm64
+  foreseerr-windows-x64.exe
+  seerr-api.yml        the OpenAPI spec Foreseerr validates requests against
+  dist/public/         the web app, built for the /Foreseerr base path
+  committag.json       the Foreseerr commit shown in /status
+```
+
+On start the plugin picks the binary for the server's OS and architecture and runs it with `sidecar/` as working directory and `FORESEERR_APP_ROOT`, on a loopback port the system picks. Foreseerr prints `FORESEERR_PLUGIN_READY {"port":…,"instance":…}` once it listens; the plugin then checks `/Foreseerr/api/v1/status` with its shared secret before routing requests to it. Foreseerr's console output goes to Jellyfin's log as `[foreseerr]` lines. Its settings and database live in `plugins/configurations/Foreseerr/foreseerr/` in Jellyfin's data folder.
 
 ## Settings
 
@@ -127,9 +156,13 @@ Everything else comes from Jellyfin on each sidecar start: server name, loopback
 
 ## Releasing
 
-1. Set `ReleaseVersion` in `Build.props` and add `release-notes/<version>.md`. Keep the alpha warning while the plugin is in alpha. Point `foreseerr.version` at a released Foreseerr tag.
-2. Tag the commit `v<version>` and push the tag.
-3. `.github/workflows/release.yml` checks that the tag matches `ReleaseVersion`, runs the tests, builds and proves both ABIs, and publishes the GitHub release (a prerelease for `-alpha`, `-beta`, and `-rc` versions) titled `Foreseerr for Jellyfin <version> (Foreseerr <version>)`.
+A new stable Foreseerr release is released here automatically. Foreseerr's release workflow sends a `foreseerr-release` dispatch once its release is published (when its `PLUGIN_DISPATCH_TOKEN` secret is set), and `.github/workflows/follow-foreseerr.yml` also checks every hour. For a release newer than `foreseerr.version` that has the `foreseerr-plugin-*` assets and `SHA256SUMS`, it runs `scripts/next-release.sh`, pushes the commit and its `v<version>` tag to `main`, and starts the release workflow on the tag. Run it by hand with `dry_run` to see the bump without pushing.
+
+A plugin-only release, or a Foreseerr release done by hand:
+
+1. Run `scripts/next-release.sh v<X.Y.Z>` with the Foreseerr tag in `foreseerr.version` (or a newer one). It sets `ReleaseVersion`, `foreseerr.version` and the README, and writes `release-notes/<version>.md`. For a plugin-only release, replace the notes' TODO line with the changes; the release refuses notes with a TODO. To leave alpha, set `plugin.channel` first.
+2. Commit, tag the commit `v<version>` and push both.
+3. `.github/workflows/release.yml` checks that the tag matches `ReleaseVersion`, runs the tests, downloads the Foreseerr runtimes, builds and proves both ABIs, and publishes the GitHub release (a prerelease for `-alpha`, `-beta`, and `-rc` versions) titled `Foreseerr for Jellyfin <version> (Foreseerr <version>)`.
 4. It then runs `.github/workflows/pages.yml`, which rebuilds the repository manifest from every release, and waits until `https://selmant.github.io/jellyfin-plugin-foreseerr/manifest.json` lists the new version.
 5. On a test Jellyfin, install from that repository and check the header button, sign-in as an administrator and as a regular user, and the plugin page.
 

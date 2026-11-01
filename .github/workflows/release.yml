@@ -1,15 +1,18 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-# Tag v<ReleaseVersion> to release. Builds both Jellyfin ABIs with the
-# Foreseerr version in foreseerr.version, proves them in real Jellyfin
-# servers, publishes the GitHub release, then refreshes the repository
-# manifest on GitHub Pages.
+# Tag v<ReleaseVersion> to release; follow-foreseerr.yml tags and dispatches
+# this on the tag by itself (a tag it pushes doesn't trigger workflows). Builds
+# both Jellyfin ABIs around the
+# Foreseerr runtimes published with the Foreseerr release in foreseerr.version,
+# proves them in real Jellyfin servers, publishes the GitHub release, then
+# refreshes the repository manifest on GitHub Pages.
 name: Release
 
 on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -52,8 +55,16 @@ jobs:
             echo "::error::Tag $TAG does not match Build.props ReleaseVersion $version"
             exit 1
           fi
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
+            echo "::error::Run this on a v<version> tag, not $GITHUB_REF_TYPE $TAG"
+            exit 1
+          fi
           notes="release-notes/$version.md"
           test -s "$notes" || { echo "::error::Missing $notes"; exit 1; }
+          if grep -n 'TODO:' "$notes"; then
+            echo "::error::$notes still has a TODO line"
+            exit 1
+          fi
           {
             echo "version=$version"
             echo "notes=$notes"
@@ -64,11 +75,11 @@ jobs:
           dotnet test Foreseerr.Jellyfin.Tests/Foreseerr.Jellyfin.Tests.csproj -c Release -p:JellyfinTarget=10.11
           dotnet test Foreseerr.Jellyfin.Tests/Foreseerr.Jellyfin.Tests.csproj -c Release -p:JellyfinTarget=12
 
-      - name: Compile Foreseerr sidecars
+      - name: Download Foreseerr runtimes
         id: foreseerr
         run: |
           scripts/sidecar.sh
-          echo "version=$(jq -r .version .foreseerr/package.json)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version dist/sidecar.json)" >> "$GITHUB_OUTPUT"
 
       - name: Pack plugin archives and manifest
         run: |

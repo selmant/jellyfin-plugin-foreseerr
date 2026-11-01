@@ -5,7 +5,9 @@
  *   bun run dev down|logs|reset [12|10.11]
  *
  * `up` reinstalls the current plugin build on every run, so the loop is:
- * edit, `bun run dev up 12 --build`, reload the browser.
+ * edit, `bun run dev up 12 --build`, reload the browser. `--build` gets the
+ * Foreseerr runtime as scripts/sidecar.sh does (FORESEERR_DIR,
+ * FORESEERR_RUNTIME_DIR, or the release in foreseerr.version).
  */
 import { randomUUID } from 'node:crypto';
 import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -125,7 +127,7 @@ if (
   !(await exists(join(pluginBuild, `sidecar/foreseerr-${sidecar}`)))
 ) {
   console.log(
-    `Building Foreseerr sidecar (${sidecar}) and plugin for Jellyfin ${abi}...`
+    `Getting the Foreseerr runtime (${sidecar}) and building the plugin for Jellyfin ${abi}...`
   );
   await run(['scripts/sidecar.sh', sidecar], { quiet: false });
   await run(['scripts/build.sh', abi, sidecar], { quiet: false });

@@ -1,0 +1,104 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+# Releases the plugin for each new stable Foreseerr release. Foreseerr's
+# release workflow dispatches `foreseerr-release` once its release is
+# published; the hourly run catches a release whose dispatch didn't arrive.
+# For a release newer than foreseerr.version, scripts/next-release.sh bumps
+# the versions and writes the notes, the commit and its v<version> tag go to
+# main, and release.yml runs on the tag.
+name: Follow Foreseerr releases
+
+on:
+  repository_dispatch:
+    types: [foreseerr-release]
+  schedule:
+    - cron: '41 * * * *'
+  workflow_dispatch:
+    inputs:
+      foreseerr_tag:
+        description: Foreseerr release tag (default the latest release)
+        required: false
+      dry_run:
+        description: Only show the bump, push nothing
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: follow-foreseerr
+  cancel-in-progress: false
+
+jobs:
+  follow:
+    name: Release for the latest Foreseerr
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+
+      - name: Find the Foreseerr release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED: ${{ inputs.foreseerr_tag || github.event.client_payload.tag }}
+        run: |
+          set -euo pipefail
+          tag="${REQUESTED:-$(gh release view --repo selmant/foreseerr --json tagName -q .tagName)}"
+          info="$(gh release view "$tag" --repo selmant/foreseerr --json isDraft,isPrerelease,assets)"
+          if [[ "$(jq -r '.isDraft or .isPrerelease' <<< "$info")" == true ]]; then
+            echo "::notice::Foreseerr $tag is a draft or a prerelease; nothing to do"
+            exit 0
+          fi
+          for asset in SHA256SUMS foreseerr-plugin-linux-x64.tar.gz foreseerr-plugin-linux-arm64.tar.gz foreseerr-plugin-windows-x64.zip; do
+            if ! jq -e --arg a "$asset" 'any(.assets[]; .name == $a)' <<< "$info" >/dev/null; then
+              echo "::notice::Foreseerr $tag has no $asset yet; nothing to do"
+              exit 0
+            fi
+          done
+          current="$(tr -d '[:space:]' < foreseerr.version)"
+          if [[ "$tag" == "$current" ]]; then
+            echo "::notice::foreseerr.version is already $tag"
+            exit 0
+          fi
+          if [[ "$(printf '%s\n%s\n' "${current#v}" "${tag#v}" | sort -V | tail -1)" != "${tag#v}" ]]; then
+            echo "::notice::foreseerr.version $current is newer than $tag"
+            exit 0
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the plugin release
+        id: bump
+        if: steps.release.outputs.tag
+        env:
+          TAG: ${{ steps.release.outputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$(scripts/next-release.sh "$TAG")"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          git status --short
+          git diff
+          echo "Plugin $version for Foreseerr $TAG" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Push the release commit and tag
+        if: steps.bump.outputs.version && !inputs.dry_run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+          VERSION: ${{ steps.bump.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m "chore(release): prepare $VERSION for Foreseerr $TAG"
+          git tag -a "v$VERSION" -m "Foreseerr for Jellyfin $VERSION (Foreseerr $TAG)"
+          git push origin HEAD:main "v$VERSION"
+          gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref "v$VERSION"
+          echo "Started the $VERSION release" >> "$GITHUB_STEP_SUMMARY"

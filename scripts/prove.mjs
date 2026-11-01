@@ -216,7 +216,7 @@ try {
   // The avatar proxy only accepts Jellyfin's compact user id.
   assert.match(me.avatar, /^\/avatarproxy\/[0-9a-f]{32}(\?|$)/);
   // The OpenAPI validator must match mounted routes: it rejects bad input
-  // and makes Express 5 req.query writable for the Discover defaults.
+  // and leaves the Discover defaults to the handlers.
   await call(base + '/Foreseerr/api/v1/discover/watchlist', { cookie });
   await call(base + '/Foreseerr/api/v1/discover/movies?page=abc', {
     cookie,

@@ -3,7 +3,7 @@ dist/
 bin/
 obj/
 
-# Foreseerr checkout compiled by scripts/sidecar.sh
+# Foreseerr checkout scripts/sidecar.sh builds for FORESEERR_REF
 .foreseerr/
 
 # Local Jellyfin test environment (bun run dev)
