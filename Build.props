@@ -11,26 +11,32 @@
     <AbiRevision Condition="'$(JellyfinTarget)' == '10.11'">0</AbiRevision>
     <AbiRevision Condition="'$(JellyfinTarget)' == '12'">1</AbiRevision>
     <TargetAbi>$(JellyfinVersion).0</TargetAbi>
-    <!-- The plugin release version (tag v<version>). Each release bundles
-         the Foreseerr version pinned in foreseerr.version. -->
-    <ReleaseVersion>0.1.0-alpha.6</ReleaseVersion>
+    <!-- The plugin release version (tag v<version>). It follows the Foreseerr
+         release pinned in foreseerr.version: X.Y.Z-<channel>.N while
+         plugin.channel is alpha, beta or rc, X.Y.Z once it is stable, and
+         X.Y.Z.N for a plugin-only fix of a stable release.
+         scripts/next-release.sh sets it. -->
+    <ReleaseVersion>0.15.0-alpha.1</ReleaseVersion>
     <!-- Jellyfin versions are four numeric parts, so the prerelease goes into
          the revision: alpha.N < beta.N < rc.N < the final release, each
          followed by the ABI digit. 0.11.0-alpha.2 for Jellyfin 12 is 0.11.0.1021. -->
     <Version>$([System.Text.RegularExpressions.Regex]::Match('$(ReleaseVersion)', '^\d+\.\d+\.\d+').Value)</Version>
     <PrereleaseChannel>$([System.Text.RegularExpressions.Regex]::Match('$(ReleaseVersion)', '^\d+\.\d+\.\d+-([a-z]+)').Groups[1].Value)</PrereleaseChannel>
     <PrereleaseNumber>$([System.Text.RegularExpressions.Regex]::Match('$(ReleaseVersion)', '^\d+\.\d+\.\d+-[a-z]+\.(\d{1,2})$').Groups[1].Value)</PrereleaseNumber>
+    <!-- X.Y.Z.N: the Nth plugin-only fix of the stable release X.Y.Z. -->
+    <FixNumber>$([System.Text.RegularExpressions.Regex]::Match('$(ReleaseVersion)', '^\d+\.\d+\.\d+\.([1-9]\d?)$').Groups[1].Value)</FixNumber>
+    <PrereleaseNumber Condition="'$(FixNumber)' != ''">$(FixNumber)</PrereleaseNumber>
     <PrereleaseNumber Condition="'$(PrereleaseNumber)' == ''">0</PrereleaseNumber>
     <ChannelRevision Condition="'$(PrereleaseChannel)' == 'alpha'">1000</ChannelRevision>
     <ChannelRevision Condition="'$(PrereleaseChannel)' == 'beta'">2000</ChannelRevision>
     <ChannelRevision Condition="'$(PrereleaseChannel)' == 'rc'">3000</ChannelRevision>
-    <ChannelRevision Condition="'$(PrereleaseChannel)' == '' And '$(ReleaseVersion)' == '$(Version)'">9000</ChannelRevision>
+    <ChannelRevision Condition="'$(PrereleaseChannel)' == '' And ('$(ReleaseVersion)' == '$(Version)' Or '$(FixNumber)' != '')">9000</ChannelRevision>
     <PluginRevision Condition="'$(ChannelRevision)' != ''">$([MSBuild]::Add($(ChannelRevision), $([MSBuild]::Add($([MSBuild]::Multiply($(PrereleaseNumber), 10)), $(AbiRevision)))))</PluginRevision>
     <AssemblyVersion>$(Version).$(PluginRevision)</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
   </PropertyGroup>
   <Target Name="CheckPluginVersion" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(ChannelRevision)' == '' Or ('$(PrereleaseChannel)' != '' And !$([System.Text.RegularExpressions.Regex]::IsMatch('$(ReleaseVersion)', '^\d+\.\d+\.\d+-[a-z]+\.\d{1,2}$')))"
-           Text="Plugin version $(ReleaseVersion) cannot become a Jellyfin plugin version. Use X.Y.Z or X.Y.Z-(alpha|beta|rc).N with N below 100." />
+           Text="Plugin version $(ReleaseVersion) cannot become a Jellyfin plugin version. Use X.Y.Z, X.Y.Z.N or X.Y.Z-(alpha|beta|rc).N with N from 1 to 99." />
   </Target>
 </Project>

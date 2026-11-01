@@ -25,16 +25,23 @@ Report problems with the plugin here, and problems with Foreseerr itself in the 
 
 ## Versions
 
-The plugin has its own version, `ReleaseVersion` in `Build.props` (currently `0.1.0-alpha.6`). Each release bundles the plugin runtimes (`foreseerr-plugin-<platform>`, built for the `/Foreseerr` base path) published with the Foreseerr release in `foreseerr.version` (currently `v0.14.0`).
+The plugin version, `ReleaseVersion` in `Build.props` (currently `0.15.0-alpha.1`), follows the Foreseerr release it bundles, in `foreseerr.version` (currently `v0.15.0`). Each release bundles the plugin runtimes (`foreseerr-plugin-<platform>`, built for the `/Foreseerr` base path) published with that Foreseerr release. `plugin.channel` (now `alpha`) sets the suffix:
+
+| `plugin.channel`    | New Foreseerr `vX.Y.Z` | Plugin-only release, same Foreseerr |
+| ------------------- | ---------------------- | ----------------------------------- |
+| `alpha`/`beta`/`rc` | `X.Y.Z-alpha.1`        | `X.Y.Z-alpha.2`, `.3`, …            |
+| `stable`            | `X.Y.Z`                | `X.Y.Z.1`, `.2`, …                  |
+
+Releases before the plugin followed Foreseerr were `0.1.0-alpha.1` to `0.1.0-alpha.6`; `0.15.0-alpha.1` came next.
 
 Each release ships one build per Jellyfin ABI:
 
-| Jellyfin | Archive                        | Framework | `X.Y.Z` release | `X.Y.Z-alpha.N` release |
-| -------- | ------------------------------ | --------- | --------------- | ----------------------- |
-| 10.11.x  | `foreseerr-jellyfin-10.11.zip` | net9.0    | `X.Y.Z.9000`    | `X.Y.Z.1N0`             |
-| 12.x     | `foreseerr-jellyfin-12.zip`    | net10.0   | `X.Y.Z.9001`    | `X.Y.Z.1N1`             |
+| Jellyfin | Archive                        | Framework | `X.Y.Z` release | `X.Y.Z.N` release | `X.Y.Z-alpha.N` release |
+| -------- | ------------------------------ | --------- | --------------- | ----------------- | ----------------------- |
+| 10.11.x  | `foreseerr-jellyfin-10.11.zip` | net9.0    | `X.Y.Z.9000`    | `X.Y.Z.9N0`       | `X.Y.Z.1N0`             |
+| 12.x     | `foreseerr-jellyfin-12.zip`    | net10.0   | `X.Y.Z.9001`    | `X.Y.Z.9N1`       | `X.Y.Z.1N1`             |
 
-Jellyfin versions are four numbers, so the revision carries the prerelease and the ABI: `alpha.N` is `1000 + 10N`, `beta.N` is `2000 + 10N`, `rc.N` is `3000 + 10N`, and a final release is `9000`, plus `0` for 10.11 or `1` for 12. For example, `0.1.0-alpha.2` for Jellyfin 12 is `0.1.0.1021`. Testers on an alpha therefore auto-update to later alphas, betas, and the final release. Other prerelease names, or `N` of 100 or more, fail the build.
+Jellyfin versions are four numbers, so the revision carries the prerelease and the ABI: `alpha.N` is `1000 + 10N`, `beta.N` is `2000 + 10N`, `rc.N` is `3000 + 10N`, a final release is `9000`, and its plugin-only fix `X.Y.Z.N` is `9000 + 10N`, plus `0` for 10.11 or `1` for 12. For example, `0.15.0-alpha.2` for Jellyfin 12 is `0.15.0.1021`. Testers on an alpha therefore auto-update to later alphas, betas, the final release and its fixes. Other prerelease names, or `N` of 100 or more, fail the build.
 
 Jellyfin treats `targetAbi` as a minimum, so a 12 server also accepts the 10.11 build. The higher revision makes installs and auto-updates pick the matching build. `Build.props` owns this mapping; `scripts/merge-manifests.mjs` refuses to publish two builds with the same version. The repository manifest lists every release, so a server keeps getting the newest build its Jellyfin version accepts after an ABI is dropped.
 
@@ -149,8 +156,12 @@ Everything else comes from Jellyfin on each sidecar start: server name, loopback
 
 ## Releasing
 
-1. Set `ReleaseVersion` in `Build.props` and add `release-notes/<version>.md`. Keep the alpha warning while the plugin is in alpha. Point `foreseerr.version` at a published (not draft) Foreseerr release that has the `foreseerr-plugin-linux-x64.tar.gz`, `foreseerr-plugin-linux-arm64.tar.gz`, and `foreseerr-plugin-windows-x64.zip` assets and their `SHA256SUMS`. CI on `main` builds that tag, so push the bump only once the Foreseerr release is out.
-2. Tag the commit `v<version>` and push the tag.
+A new stable Foreseerr release is released here automatically. Foreseerr's release workflow sends a `foreseerr-release` dispatch once its release is published (when its `PLUGIN_DISPATCH_TOKEN` secret is set), and `.github/workflows/follow-foreseerr.yml` also checks every hour. For a release newer than `foreseerr.version` that has the `foreseerr-plugin-*` assets and `SHA256SUMS`, it runs `scripts/next-release.sh`, pushes the commit and its `v<version>` tag to `main`, and starts the release workflow on the tag. Run it by hand with `dry_run` to see the bump without pushing.
+
+A plugin-only release, or a Foreseerr release done by hand:
+
+1. Run `scripts/next-release.sh v<X.Y.Z>` with the Foreseerr tag in `foreseerr.version` (or a newer one). It sets `ReleaseVersion`, `foreseerr.version` and the README, and writes `release-notes/<version>.md`. For a plugin-only release, replace the notes' TODO line with the changes; the release refuses notes with a TODO. To leave alpha, set `plugin.channel` first.
+2. Commit, tag the commit `v<version>` and push both.
 3. `.github/workflows/release.yml` checks that the tag matches `ReleaseVersion`, runs the tests, downloads the Foreseerr runtimes, builds and proves both ABIs, and publishes the GitHub release (a prerelease for `-alpha`, `-beta`, and `-rc` versions) titled `Foreseerr for Jellyfin <version> (Foreseerr <version>)`.
 4. It then runs `.github/workflows/pages.yml`, which rebuilds the repository manifest from every release, and waits until `https://selmant.github.io/jellyfin-plugin-foreseerr/manifest.json` lists the new version.
 5. On a test Jellyfin, install from that repository and check the header button, sign-in as an administrator and as a regular user, and the plugin page.

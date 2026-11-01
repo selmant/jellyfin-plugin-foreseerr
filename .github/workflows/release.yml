@@ -1,6 +1,8 @@
 ---
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-# Tag v<ReleaseVersion> to release. Builds both Jellyfin ABIs around the
+# Tag v<ReleaseVersion> to release; follow-foreseerr.yml tags and dispatches
+# this on the tag by itself (a tag it pushes doesn't trigger workflows). Builds
+# both Jellyfin ABIs around the
 # Foreseerr runtimes published with the Foreseerr release in foreseerr.version,
 # proves them in real Jellyfin servers, publishes the GitHub release, then
 # refreshes the repository manifest on GitHub Pages.
@@ -10,6 +12,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -52,8 +55,16 @@ jobs:
             echo "::error::Tag $TAG does not match Build.props ReleaseVersion $version"
             exit 1
           fi
+          if [[ "$GITHUB_REF_TYPE" != tag ]]; then
+            echo "::error::Run this on a v<version> tag, not $GITHUB_REF_TYPE $TAG"
+            exit 1
+          fi
           notes="release-notes/$version.md"
           test -s "$notes" || { echo "::error::Missing $notes"; exit 1; }
+          if grep -n 'TODO:' "$notes"; then
+            echo "::error::$notes still has a TODO line"
+            exit 1
+          fi
           {
             echo "version=$version"
             echo "notes=$notes"
