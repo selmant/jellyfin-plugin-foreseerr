@@ -25,7 +25,7 @@ Report problems with the plugin here, and problems with Foreseerr itself in the 
 
 ## Versions
 
-The plugin version, `ReleaseVersion` in `Build.props` (currently `0.15.1-alpha.1`), follows the Foreseerr release it bundles, in `foreseerr.version` (currently `v0.15.1`). Each release bundles the plugin runtimes (`foreseerr-plugin-<platform>`, built for the `/Foreseerr` base path) published with that Foreseerr release. `plugin.channel` (now `alpha`) sets the suffix:
+The plugin version, `ReleaseVersion` in `Build.props` (currently `0.16.0-alpha.1`), follows the Foreseerr release it bundles, in `foreseerr.version` (currently `v0.16.0`). Each release bundles the plugin runtimes (`foreseerr-plugin-<platform>`, built for the `/Foreseerr` base path) published with that Foreseerr release. `plugin.channel` (now `alpha`) sets the suffix:
 
 | `plugin.channel`    | New Foreseerr `vX.Y.Z` | Plugin-only release, same Foreseerr |
 | ------------------- | ---------------------- | ----------------------------------- |

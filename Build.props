@@ -16,7 +16,7 @@
          plugin.channel is alpha, beta or rc, X.Y.Z once it is stable, and
          X.Y.Z.N for a plugin-only fix of a stable release.
          scripts/next-release.sh sets it. -->
-    <ReleaseVersion>0.15.1-alpha.1</ReleaseVersion>
+    <ReleaseVersion>0.16.0-alpha.1</ReleaseVersion>
     <!-- Jellyfin versions are four numeric parts, so the prerelease goes into
          the revision: alpha.N < beta.N < rc.N < the final release, each
          followed by the ABI digit. 0.11.0-alpha.2 for Jellyfin 12 is 0.11.0.1021. -->
